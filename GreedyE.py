@@ -12,12 +12,21 @@
 
 """Choose a noise-adaptive Layout based on current calibration data for the backend."""
 
+"""
+usecase:
+NL = NoiseAdaptiveLayout(backend_prop=backend.properties(),coupling_map=backend.coupling_map)
+NL.run(rev_dag1, dag2)
+layout = NL.property_set["layout"]
+"""
+import os
 import math
+from qiskit.visualization import plot_gate_map, plot_circuit_layout
 from copy import deepcopy
 import rustworkx as rx
 from rustworkx.visualization import mpl_draw
 import matplotlib.pyplot as plt
 from qiskit.dagcircuit import DAGCircuit
+from qiskit.providers import BackendV2
 from qiskit.transpiler.layout import Layout
 from qiskit.transpiler.basepasses import AnalysisPass
 from qiskit.transpiler.exceptions import TranspilerError
@@ -56,7 +65,7 @@ class NoiseAdaptiveLayout(AnalysisPass):
          by being set in `property_set`.
     """
 
-    def __init__(self, backend_prop, coupling_map=None):
+    def __init__(self, backend:BackendV2):
         """NoiseAdaptiveLayout initializer.
 
         Args:
@@ -69,19 +78,21 @@ class NoiseAdaptiveLayout(AnalysisPass):
             TranspilerError: if invalid options
         """
         super().__init__()
-        self.target = backend_prop
-        if coupling_map:
+        self.backend = backend
+        backend_prop = backend.properties()
+        self.target = backend.properties()
+        if backend.coupling_map:
             # A backend might have more properties than qubits/gates in the configuration. This is a
             # problem that the Target path should handle differently (by solving that possible
             # inconsistency internally). For the non-target path, this is a possible solution.
             # See https://github.com/Qiskit/qiskit/issues/7677
             backend_prop = deepcopy(backend_prop)
-            edge_set = set(coupling_map.graph.edge_list())
+            edge_set = set(backend.coupling_map.graph.edge_list())
             backend_prop.gates = filter(
                 lambda ginfo: tuple(ginfo.qubits) in edge_set,
                 backend_prop.gates,
             )
-            backend_prop.qubits = backend_prop.qubits[: 1 + max(coupling_map.physical_qubits)]
+            backend_prop.qubits = backend_prop.qubits[: 1 + max(backend.coupling_map.physical_qubits)]
         self.backend_prop = backend_prop
 
         self.swap_graph = rx.PyDiGraph()
@@ -200,8 +211,6 @@ class NoiseAdaptiveLayout(AnalysisPass):
         # plt.savefig("graph.png")
         # plt.close()
         # return idx
-
-
 
     def _select_next_edge(self):
         """Select the next edge.
@@ -353,3 +362,39 @@ class NoiseAdaptiveLayout(AnalysisPass):
         for qreg in dag1.qregs.values():
             layout.add_register(qreg)
         self.property_set["layout"] = layout
+
+    def visualize_initial_mapping(self, circuit, fpath="./output/visualize/InitialMapping/", fname="initial_mapping.png"):
+        initial_layout = self.property_set["layout"]
+        os.makedirs(fpath, exist_ok=True)
+
+        # Prepare node colors: black for mapped, purple for unmapped
+        qubit_colors = []
+        phys_to_virt = initial_layout.get_physical_bits()  # physical -> Qubit object
+        for node in range(self.backend.configuration().n_qubits):
+            if node in phys_to_virt:
+                qubit_colors.append('black')  # mapped
+            else:
+                qubit_colors.append('purple')  # unmapped
+
+        # Plot gate map
+        fig_gate = plot_gate_map(self.backend, label_qubits=True, qubit_color=qubit_colors)
+        bit_locations = {
+            bit: {"register": register, "index": index}
+            for register in initial_layout.get_registers()
+            for index, bit in enumerate(register)
+        }
+
+        # Convert layout dict to string for display
+        layout_str = "Physical -> Virtual:\n"
+        for phys, virt in phys_to_virt.items():
+            bit_register = bit_locations[virt]["register"]
+            if bit_register is None or bit_register.name != "ancilla":
+                layout_str += f"{phys} -> {str(bit_locations[virt]["register"].name)+"_"+str(bit_locations[virt]["index"])}\n"
+        # Add the layout text next to the figure
+        fig_gate.text(1.05, 0.5, layout_str, rotation=0, fontsize=12, va='center', ha='left')
+        fig_gate.suptitle(circuit.name, fontsize=14)
+        # Save figure
+        save_path = os.path.join(fpath, fname)
+        fig_gate.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close(fig_gate)
+        print(f"Saved combined figure to {save_path}")

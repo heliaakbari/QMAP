@@ -1181,7 +1181,7 @@ def plot_circuit_layout(circuit, backend, view="virtual", qubit_coordinates=None
 
     qubits = []
     qubit_labels = [""] * num_qubits
-
+    qcolors = ["#648fff"]  * num_qubits
     bit_locations = {
         bit: {"register": register, "index": index}
         for register in circuit._layout.initial_layout.get_registers()
@@ -1190,13 +1190,14 @@ def plot_circuit_layout(circuit, backend, view="virtual", qubit_coordinates=None
     for index, qubit in enumerate(circuit._layout.initial_layout.get_virtual_bits()):
         if qubit not in bit_locations:
             bit_locations[qubit] = {"register": None, "index": index}
-
+    print(circuit._layout.initial_layout.get_physical_bits())
     if view == "virtual":
         for key, val in circuit._layout.initial_layout.get_virtual_bits().items():
             bit_register = bit_locations[key]["register"]
             if bit_register is None or bit_register.name != "ancilla":
                 qubits.append(val)
                 qubit_labels[val] = str(bit_locations[key]["index"])
+                qcolors[val] ="#000000"
 
     elif view == "physical":
         for key, val in circuit._layout.initial_layout.get_physical_bits().items():
@@ -1208,12 +1209,8 @@ def plot_circuit_layout(circuit, backend, view="virtual", qubit_coordinates=None
     else:
         raise VisualizationError("Layout view must be 'virtual' or 'physical'.")
 
-    qcolors = ["#648fff"] * num_qubits
-    for k in qubits:
-        qcolors[k] = "black"
-
     lcolors = ["#648fff"] * cmap_len
-
+    print(qubits)
     for idx, edge in enumerate(cmap):
         if edge[0] in qubits and edge[1] in qubits:
             lcolors[idx] = "black"
