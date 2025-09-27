@@ -13,16 +13,45 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 from qiskit_ibm_runtime.fake_provider import FakeGuadalupeV2, FakeWashingtonV2
+from test.benchmarks.qft import build_model_circuit
+from test.benchmarks.ripple_adder import build_ripple_adder_circuit
+from qiskit import QuantumRegister, QuantumCircuit
+from qiskit.converters import circuit_to_dag
+from GreedyE import NoiseAdaptiveLayout
+from qiskit_ibm_runtime.fake_provider import FakeGuadalupeV2
+from qiskit.transpiler.passes import Unroll3qOrMore
+from qiskit.visualization import plot_error_map
+from SplitCircuit import Splitter
+
 
 # set seed for reproducibility
 seed = 42
-digits = 6
-optimization_level = 1
+digits = 3
+optimization_level = 0
+index= 0
+qr = QuantumRegister(5)
 # Create GHZ circuit
 qc = build_ripple_adder_circuit(digits)
 num_qubits = qc.num_qubits
 
-qc.measure_all()
+dag = circuit_to_dag(qc)
+
+UN = Unroll3qOrMore()
+dag = UN.run(dag)
+
+SP = Splitter(dag)
+rev_dag1 , dag2 = SP.splitDagRandom()
+#SP.visualizeCircuits(dagName="test")
+
+backend = FakeGuadalupeV2()
+#figure = plot_error_map(backend)
+#figure.savefig(fname='./processor.png')
+
+NL = NoiseAdaptiveLayout(backend=backend)
+NL.run(rev_dag1, dag2)
+init_layout = NL.property_set["layout"]
+
+
 
 
 # ZZII...II, ZIZI...II, ... , ZIII...IZ
@@ -36,8 +65,6 @@ print(len(operator_strings))
 operators = [SparsePauliOp(operator) for operator in operator_strings]
 
 
-
-backend = FakeGuadalupeV2()
 
 # Create the SabreLayout passes for the custom configurations
 # sl_1 = SabreLayout(
@@ -70,26 +97,26 @@ pm_3 = generate_preset_pass_manager(
 )
 
 pmha_1 = generate_preset_pass_manager(
-    optimization_level=optimization_level, backend=backend, seed_transpiler=seed
+    optimization_level=optimization_level, backend=backend, seed_transpiler=seed, initial_layout=init_layout
 )
 
 pmha_2 = generate_preset_pass_manager(
-    optimization_level=optimization_level, backend=backend, seed_transpiler=seed
+    optimization_level=optimization_level, backend=backend, seed_transpiler=seed, initial_layout=init_layout
 )
 
 pmha_3 = generate_preset_pass_manager(
-    optimization_level=optimization_level, backend=backend, seed_transpiler=seed
+    optimization_level=optimization_level, backend=backend, seed_transpiler=seed, initial_layout=init_layout
 )
 
 print(pm_1.routing)
 #pm_1.layout.replace(index=1, passes=sl_1)
 
-pm_1.routing.replace(index=3, passes=ss_1)
-pmha_1.routing.replace(index=3, passes=has_1)
-pm_2.routing.replace(index=3, passes=ss_2)
-pmha_2.routing.replace(index=3, passes=has_2)
-pm_3.routing.replace(index=3, passes=ss_3)
-pmha_3.routing.replace(index=3, passes=has_3)
+pm_1.routing.replace(index=index, passes=ss_1)
+pmha_1.routing.replace(index=index, passes=has_1)
+pm_2.routing.replace(index=index, passes=ss_2)
+pmha_2.routing.replace(index=index, passes=has_2)
+pm_3.routing.replace(index=index, passes=ss_3)
+pmha_3.routing.replace(index=index, passes=has_3)
 
 # Transpile the circuit with each pass manager and measure the time
 t0 = time.time()
