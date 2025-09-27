@@ -190,7 +190,7 @@ from .routing import LookaheadSwap
 from .routing import SabreSwap
 from .routing import Commuting2qGateRouter
 from .routing import StarPreRouting
-
+from .routing import HASwap
 # basis change
 from .basis import Decompose
 from .basis import UnrollCustomDefinitions

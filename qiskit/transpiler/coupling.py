@@ -21,12 +21,11 @@ onto a device with this coupling.
 
 import math
 from typing import List
-
+import numpy as np
 import rustworkx as rx
 from rustworkx.visualization import graphviz_draw
 
 from qiskit.transpiler.exceptions import CouplingError
-
 
 class CouplingMap:
     """
@@ -41,6 +40,9 @@ class CouplingMap:
         "description",
         "graph",
         "_dist_matrix",
+        "_duration_dist_matrix",
+        "_error_dist_matrix",
+        "_mix_dist_matrix",
         "_qubit_list",
         "_size",
         "_is_symmetric",
@@ -62,6 +64,9 @@ class CouplingMap:
         self.graph = rx.PyDiGraph()
         # a dict of dicts from node pairs to distances
         self._dist_matrix = None
+        self._duration_dist_matrix = None
+        self._error_dist_matrix = None
+        self._mix_dist_matrix = None
         # a sorted list of physical qubits (integers) in this coupling map
         self._qubit_list = None
         # number of qubits in the graph
@@ -105,6 +110,9 @@ class CouplingMap:
             )
         self.graph.add_node(physical_qubit)
         self._dist_matrix = None  # invalidate
+        self._duration_dist_matrix = None
+        self._mix_dist_matrix = None
+        self._error_dist_matrix = None
         self._qubit_list = None  # invalidate
         self._size = None  # invalidate
 
@@ -121,6 +129,9 @@ class CouplingMap:
             self.add_physical_qubit(dst)
         self.graph.add_edge(src, dst, None)
         self._dist_matrix = None  # invalidate
+        self._duration_dist_matrix = None
+        self._mix_dist_matrix = None
+        self._error_dist_matrix = None
         self._is_symmetric = None  # invalidate
 
     @property
@@ -149,6 +160,24 @@ class CouplingMap:
         """
         return self.graph.neighbors(physical_qubit)
 
+    def compute_neighbor_based_matrices(self, dist_matrix, zero_value):
+        n = len(self.graph.nodes())
+        new_matrix = np.full((n, n), zero_value, dtype=float)
+
+        for i in range(n):
+            neighbors = list(self.neighbors(i))
+            for j in range(n):
+                if i == j:
+                    new_matrix[i, j] = zero_value
+                else:
+                    # Collect distances via neighbors
+                    dist_candidates = [dist_matrix[j, n] for n in neighbors]
+
+                    if dist_candidates:
+                        new_matrix[j, i] = min(dist_candidates)
+        return new_matrix
+
+
     @property
     def distance_matrix(self):
         """Return the distance matrix for the coupling map.
@@ -173,6 +202,117 @@ class CouplingMap:
             self._dist_matrix = rx.digraph_distance_matrix(
                 self.graph, as_undirected=True, null_value=math.inf
             )
+
+    @property
+    def error_distance_matrix(self):
+        """Return the distance matrix for the coupling map.
+
+        For any qubits where there isn't a path available between them the value
+        in this position of the distance matrix will be ``math.inf``.
+        """
+        self.compute_error_distance_matrix()
+        return self._error_dist_matrix
+
+    def compute_error_distance_matrix(self):
+        """Compute the full distance matrix on pairs of nodes.
+
+        The distance map self._dist_matrix is computed from the graph using
+        all_pairs_shortest_path_length. This is normally handled internally
+        by the :attr:`~qiskit.transpiler.CouplingMap.distance_matrix`
+        attribute or the :meth:`~qiskit.transpiler.CouplingMap.distance` method
+        but can be called if you're accessing the distance matrix outside of
+        those or want to pre-generate it.
+        """
+        def weight_fn(edge_data):
+            """Return the error as the weight of the edge."""
+            # Case 1: If edge_data["2qgate"] is a dict
+            return 1-(1-edge_data["cx"].error)**3
+
+        if self._error_dist_matrix is None:
+            self._error_dist_matrix = rx.digraph_floyd_warshall_numpy(
+                self.graph,
+                weight_fn=weight_fn
+                ,as_undirected=True, default_weight=math.inf
+            )
+
+    @property
+    def duration_distance_matrix(self):
+        """Return the distance matrix for the coupling map.
+
+        For any qubits where there isn't a path available between them the value
+        in this position of the distance matrix will be ``math.inf``.
+        """
+        self.compute_duration_distance_matrix()
+        return self._duration_dist_matrix
+
+    def compute_duration_distance_matrix(self):
+        """Compute the full distance matrix on pairs of nodes.
+
+        The distance map self._dist_matrix is computed from the graph using
+        all_pairs_shortest_path_length. This is normally handled internally
+        by the :attr:`~qiskit.transpiler.CouplingMap.distance_matrix`
+        attribute or the :meth:`~qiskit.transpiler.CouplingMap.distance` method
+        but can be called if you're accessing the distance matrix outside of
+        those or want to pre-generate it.
+        """
+        def weight_fn(edge_data):
+            """Return the duration as the weight of the edge."""
+            # Case 1: If edge_data["2qgate"] is a dict
+            return 3*edge_data["cx"].duration
+
+        if self._duration_dist_matrix is None:
+            self._duration_dist_matrix = rx.digraph_floyd_warshall_numpy(
+                self.graph,
+                weight_fn=weight_fn
+                ,as_undirected=True, default_weight=math.inf
+            )
+
+    @property
+    def mix_dist_matrix(self):
+        """Return the distance matrix for the coupling map.
+
+        For any qubits where there isn't a path available between them the value
+        in this position of the distance matrix will be ``math.inf``.
+        """
+        self.compute_mix_dist_matrix()
+        return self._mix_dist_matrix
+
+    def compute_mix_dist_matrix(self):
+        """Compute the full distance matrix on pairs of nodes.
+
+        The distance map self._dist_matrix is computed from the graph using
+        all_pairs_shortest_path_length. This is normally handled internally
+        by the :attr:`~qiskit.transpiler.CouplingMap.distance_matrix`
+        attribute or the :meth:`~qiskit.transpiler.CouplingMap.distance` method
+        but can be called if you're accessing the distance matrix outside of
+        those or want to pre-generate it.
+        """
+        if self._dist_matrix is None:
+            self.compute_distance_matrix()
+
+        if self._error_dist_matrix is None:
+            self.compute_error_distance_matrix()
+
+        if self._duration_dist_matrix is None:
+            self.compute_duration_distance_matrix()
+
+        if self._mix_dist_matrix is None:
+
+            neighbor_hops_matrix = self.compute_neighbor_based_matrices(self._dist_matrix, 0)
+            neighbor_duration_matrix = self.compute_neighbor_based_matrices(self._duration_dist_matrix, 0)
+            neighbor_error_matrix = self.compute_neighbor_based_matrices(self._error_dist_matrix,0)
+
+            norm_hops = np.linalg.norm(np.where(np.isinf(neighbor_hops_matrix), 0, neighbor_hops_matrix))
+            norm_duration = np.linalg.norm(np.where(np.isinf(neighbor_duration_matrix), 0, neighbor_duration_matrix))
+            norm_error = np.linalg.norm(np.where(np.isinf(neighbor_error_matrix), 0, neighbor_error_matrix))
+
+            print('printing norms')
+            print(norm_hops)
+            print(norm_duration)
+            print(norm_error)
+
+            self._mix_dist_matrix = (neighbor_duration_matrix/norm_duration) + (neighbor_hops_matrix/norm_hops) + (neighbor_error_matrix/norm_error)
+
 
     def distance(self, physical_qubit1, physical_qubit2):
         """Returns the undirected distance between physical_qubit1 and physical_qubit2.
