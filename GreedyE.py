@@ -31,6 +31,7 @@ from qiskit.transpiler.layout import Layout
 from qiskit.transpiler.basepasses import AnalysisPass
 from qiskit.transpiler.exceptions import TranspilerError
 from collections import defaultdict
+from SplitCircuit import Splitter
 
 class NoiseAdaptiveLayout(AnalysisPass):
     """Choose a noise-adaptive Layout based on current calibration data for the backend.
@@ -65,7 +66,7 @@ class NoiseAdaptiveLayout(AnalysisPass):
          by being set in `property_set`.
     """
 
-    def __init__(self, backend:BackendV2):
+    def __init__(self, backend:BackendV2, k: int = 3):
         """NoiseAdaptiveLayout initializer.
 
         Args:
@@ -79,6 +80,7 @@ class NoiseAdaptiveLayout(AnalysisPass):
         """
         super().__init__()
         self.backend = backend
+        self.k=k
         backend_prop = backend.properties()
         self.target = backend.properties()
         if backend.coupling_map:
@@ -98,22 +100,20 @@ class NoiseAdaptiveLayout(AnalysisPass):
         self.swap_graph = rx.PyDiGraph()
         self.cx_reliability = {}
         self.readout_reliability = {}
-        self.available_hw_qubits = []
+        self.hw_qubits = []
         self.gate_list = []
         self.gate_reliability = {}
         self.swap_reliabs = {}
+
         self.prog_graph = rx.PyGraph()
         self.prog_neighbors = {}
         self.qarg_to_id = {}
-        self.pending_program_edges = []
-        self.prog2hw = {}
+        self.program_edges = []
 
-    def _initialize_backend_prop(self):
-        """Extract readout and CNOT errors and compute swap costs."""
         backend_prop = self.backend_prop
         edge_list = []
         for ginfo in backend_prop.gates:
-            if ginfo.gate == "cx":
+            if ginfo.gate == "cz" or ginfo.gate == "cx":
                 for item in ginfo.parameters:
                     if item.name == "gate_error":
                         g_reliab = 1.0 - item.value
@@ -133,7 +133,7 @@ class NoiseAdaptiveLayout(AnalysisPass):
             for nduv in q:
                 if nduv.name == "readout_error":
                     self.readout_reliability[idx] = 1.0 - nduv.value
-                    self.available_hw_qubits.append(idx)
+                    self.hw_qubits.append(idx)
             idx += 1
         for edge in self.cx_reliability:
             self.gate_reliability[edge] = (
@@ -165,6 +165,8 @@ class NoiseAdaptiveLayout(AnalysisPass):
                         if reliab > best_reliab:
                             best_reliab = reliab
                     self.swap_reliabs[i][j] = best_reliab
+
+
     def _qarg_to_id(self, qubit):
         """Convert qarg with name and value to an integer id."""
         return self.qarg_to_id[qubit]
@@ -195,43 +197,27 @@ class NoiseAdaptiveLayout(AnalysisPass):
         return idx
 
 
-        # for gate in dag.two_qubit_ops():
-        #     qid1 = self._qarg_to_id(gate.qargs[0])
-        #     qid2 = self._qarg_to_id(gate.qargs[1])
-        #     min_q = min(qid1, qid2)
-        #     max_q = max(qid1, qid2)
-        #     edge_weight = 1
-        #     if self.prog_graph.has_edge(min_q, max_q):
-        #         edge_weight = self.prog_graph[min_q][max_q]["weight"] + 1
-        #     edge_list.append((min_q, max_q, edge_weight))
-        # self.prog_graph.extend_from_weighted_edge_list(edge_list)
 
-        # plt.figure()
-        # mpl_draw(self.prog_graph, with_labels=True)
-        # plt.savefig("graph.png")
-        # plt.close()
-        # return idx
-
-    def _select_next_edge(self):
+    def _select_next_edge(self, pending_edges, prog2hw):
         """Select the next edge.
 
         If there is an edge with one endpoint mapped, return it.
         Else return in the first edge
         """
-        for edge in self.pending_program_edges:
-            q1_mapped = edge[0] in self.prog2hw
-            q2_mapped = edge[1] in self.prog2hw
+        for edge in pending_edges:
+            q1_mapped = edge[0] in prog2hw
+            q2_mapped = edge[1] in prog2hw
             assert not (q1_mapped and q2_mapped)
             if q1_mapped or q2_mapped:
                 return edge
-        return self.pending_program_edges[0]
+        return pending_edges[0]
 
-    def _select_best_remaining_cx(self):
+    def _select_best_remaining_cx(self,available_hw_qubits):
         """Select best remaining CNOT in the hardware for the next program edge."""
         candidates = []
         for gate in self.gate_list:
-            chk1 = gate[0] in self.available_hw_qubits
-            chk2 = gate[1] in self.available_hw_qubits
+            chk1 = gate[0] in available_hw_qubits
+            chk2 = gate[1] in available_hw_qubits
             if chk1 and chk2:
                 candidates.append(gate)
         best_reliab = 0
@@ -242,16 +228,16 @@ class NoiseAdaptiveLayout(AnalysisPass):
                 best_item = item
         return best_item
 
-    def _select_best_remaining_qubit(self, prog_qubit):
+    def _select_best_remaining_qubit(self, prog_qubit, available_hw_qubits, prog2hw):
         """Select the best remaining hardware qubit for the next program qubit."""
         reliab_store = {}
         if prog_qubit not in self.prog_neighbors:
             self.prog_neighbors[prog_qubit] = self.prog_graph.neighbors(prog_qubit)
-        for hw_qubit in self.available_hw_qubits:
+        for hw_qubit in available_hw_qubits:
             reliab = 1
             for n in self.prog_neighbors[prog_qubit]:
-                if n in self.prog2hw:
-                    reliab *= self.swap_reliabs[self.prog2hw[n]][hw_qubit]
+                if n in prog2hw:
+                    reliab *= self.swap_reliabs[prog2hw[n]][hw_qubit]
             reliab *= self.readout_reliability[hw_qubit]
             reliab_store[hw_qubit] = reliab
         max_reliab = 0
@@ -261,6 +247,20 @@ class NoiseAdaptiveLayout(AnalysisPass):
                 max_reliab = reliab_store[hw_qubit]
                 best_hw_qubit = hw_qubit
         return best_hw_qubit
+
+    def _score_mapping(self, mapping):
+        score = 0
+        for (u, v, w) in self.program_edge_list:
+            if u in mapping and v in mapping:
+                hw_u, hw_v = mapping[u], mapping[v]
+                if (hw_u, hw_v) in self.cx_reliability:
+                    R = self.cx_reliability[(hw_u, hw_v)]
+                elif (hw_v, hw_u) in self.cx_reliability:
+                    R = self.cx_reliability[(hw_v, hw_u)]
+                else:
+                    R = self.swap_reliabs[hw_u][hw_v]
+                score += R * w
+        return score
 
     def dag_only_two_qubit_ops(self, dag):
         """Return a new DAGCircuit containing only the 2-qubit gates from the input DAG."""
@@ -278,93 +278,123 @@ class NoiseAdaptiveLayout(AnalysisPass):
 
         return new_dag
 
-    def run(self, dag1, dag2):
-        """Run the NoiseAdaptiveLayout pass on `dag`."""
-        self.swap_graph = rx.PyDiGraph()
-        self.cx_reliability = {}
-        self.readout_reliability = {}
+    def run(self, dag):
+
+        SP = Splitter(dag)
+        dag1 , dag2 = SP.splitDagRandom()
+        #SP.visualizeCircuits(dagName="test")
+
         self.available_hw_qubits = []
-        self.gate_list = []
-        self.gate_reliability = {}
-        self.swap_reliabs = {}
+
         self.prog_graph = rx.PyGraph()
         self.prog_neighbors = {}
         self.qarg_to_id = {}
-        self.pending_program_edges = []
-        self.prog2hw = {}
         self.program_edge_dict = defaultdict(float)
         self.program_edge_list = []
 
-        self._initialize_backend_prop()
         num_qubits = self._create_program_graph(dag1)
         num_qubits = self._create_program_graph(dag2)
 
         self.program_edge_list = [(u, v, w) for (u, v), w in self.program_edge_dict.items()]
         self.prog_graph.extend_from_weighted_edge_list(self.program_edge_list)
 
-        if num_qubits > len(self.swap_graph):
+        if num_qubits > len(self.backend_prop.qubits):
             raise TranspilerError("Number of qubits greater than device.")
 
         # sort by weight, then edge name for determinism (since networkx on python 3.5 returns
         # different order of edges)
-        self.pending_program_edges = sorted(
+        self.program_edges = sorted(
             self.prog_graph.weighted_edge_list(), key=lambda x: [x[2], -x[0], -x[1]], reverse=True
         )
-        print(self.pending_program_edges)
-        while self.pending_program_edges:
-            edge = self._select_next_edge()
-            q1_mapped = edge[0] in self.prog2hw
-            q2_mapped = edge[1] in self.prog2hw
-            if (not q1_mapped) and (not q2_mapped):
-                best_hw_edge = self._select_best_remaining_cx()
-                if best_hw_edge is None:
-                    raise TranspilerError(
-                        "CNOT({}, {}) could not be placed "
-                        "in selected device.".format(edge[0], edge[1])
-                    )
-                self.prog2hw[edge[0]] = best_hw_edge[0]
-                self.prog2hw[edge[1]] = best_hw_edge[1]
-                self.available_hw_qubits.remove(best_hw_edge[0])
-                self.available_hw_qubits.remove(best_hw_edge[1])
-            elif not q1_mapped:
-                best_hw_qubit = self._select_best_remaining_qubit(edge[0])
-                if best_hw_qubit is None:
-                    raise TranspilerError(
-                        "CNOT({}, {}) could not be placed in selected device. "
-                        "No qubit near qr[{}] available".format(edge[0], edge[1], edge[0])
-                    )
-                self.prog2hw[edge[0]] = best_hw_qubit
-                self.available_hw_qubits.remove(best_hw_qubit)
-            else:
-                best_hw_qubit = self._select_best_remaining_qubit(edge[1])
-                if best_hw_qubit is None:
-                    raise TranspilerError(
-                        "CNOT({}, {}) could not be placed in selected device. "
-                        "No qubit near qr[{}] available".format(edge[0], edge[1], edge[1])
-                    )
-                self.prog2hw[edge[1]] = best_hw_qubit
-                self.available_hw_qubits.remove(best_hw_qubit)
-            new_edges = [
-                x
-                for x in self.pending_program_edges
-                if not (x[0] in self.prog2hw and x[1] in self.prog2hw)
-            ]
-            self.pending_program_edges = new_edges
-        for qid in self.qarg_to_id.values():
-            if qid not in self.prog2hw:
-                self.prog2hw[qid] = self.available_hw_qubits[0]
-                self.available_hw_qubits.remove(self.prog2hw[qid])
+        if not self.program_edges:
+            return
+
+        print(self.program_edges)
+
+        best_hw_edges = sorted(self.gate_reliability.items(), key=lambda x: x[1], reverse=True)[: self.k*2]
+
+        candidate_scores = []
+
+        for hw_edge, _ in best_hw_edges:
+
+            pending_edges = deepcopy(self.program_edges)
+            available_hw_qubits = deepcopy(self.hw_qubits)
+            prog2hw = {}
+            first_edge = pending_edges[0]
+            prog2hw[first_edge[0]] = hw_edge[0]
+            prog2hw[first_edge[1]] = hw_edge[1]
+            available_hw_qubits.remove(hw_edge[0])
+            available_hw_qubits.remove(hw_edge[1])
+
+            while pending_edges:
+                new_edges = [
+                    x
+                    for x in pending_edges
+                    if not (x[0] in prog2hw and x[1] in prog2hw)
+                ]
+                pending_edges = new_edges
+
+                if not pending_edges:
+                    break
+
+                edge = self._select_next_edge(pending_edges,prog2hw)
+                q1_mapped = edge[0] in prog2hw
+                q2_mapped = edge[1] in prog2hw
+                if (not q1_mapped) and (not q2_mapped):
+                    best_hw_edge = self._select_best_remaining_cx(available_hw_qubits)
+                    if best_hw_edge is None:
+                        raise TranspilerError(
+                            "CNOT({}, {}) could not be placed "
+                            "in selected device.".format(edge[0], edge[1])
+                        )
+                    prog2hw[edge[0]] = best_hw_edge[0]
+                    prog2hw[edge[1]] = best_hw_edge[1]
+                    available_hw_qubits.remove(best_hw_edge[0])
+                    available_hw_qubits.remove(best_hw_edge[1])
+                elif not q1_mapped:
+                    best_hw_qubit = self._select_best_remaining_qubit(edge[0],available_hw_qubits,prog2hw)
+                    if best_hw_qubit is None:
+                        raise TranspilerError(
+                            "CNOT({}, {}) could not be placed in selected device. "
+                            "No qubit near qr[{}] available".format(edge[0], edge[1], edge[0])
+                        )
+                    prog2hw[edge[0]] = best_hw_qubit
+                    available_hw_qubits.remove(best_hw_qubit)
+                else:
+                    best_hw_qubit = self._select_best_remaining_qubit(edge[1],available_hw_qubits,prog2hw)
+                    if best_hw_qubit is None:
+                        raise TranspilerError(
+                            "CNOT({}, {}) could not be placed in selected device. "
+                            "No qubit near qr[{}] available".format(edge[0], edge[1], edge[1])
+                        )
+                    prog2hw[edge[1]] = best_hw_qubit
+                    available_hw_qubits.remove(best_hw_qubit)
+
+            for qid in self.qarg_to_id.values():
+                if qid not in prog2hw:
+                    prog2hw[qid] = available_hw_qubits[0]
+                    available_hw_qubits.remove(prog2hw[qid])
+
+            score = self._score_mapping(prog2hw)
+            candidate_scores.append((score, prog2hw))
+
+        print(f"candidates:",candidate_scores);
+        best_mapping = max(candidate_scores, key=lambda x: x[0])[1]
+
         layout = Layout()
         for q in dag1.qubits:
             pid = self._qarg_to_id(q)
-            hwid = self.prog2hw[pid]
-            layout[q] = hwid
+            layout[q] = best_mapping[pid]
         for qreg in dag1.qregs.values():
             layout.add_register(qreg)
         self.property_set["layout"] = layout
 
-    def visualize_initial_mapping(self, circuit, fpath="./output/visualize/InitialMapping/", fname="initial_mapping.png"):
-        initial_layout = self.property_set["layout"]
+        return layout, dag1, dag2
+
+
+
+    def visualize_initial_mapping(self, circuit,layout, fpath="./output/visualize/InitialMapping/", fname="initial_mapping.png"):
+        initial_layout = layout
         os.makedirs(fpath, exist_ok=True)
 
         # Prepare node colors: black for mapped, purple for unmapped

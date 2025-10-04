@@ -318,7 +318,9 @@ impl RoutingState<'_, '_> {
         };
         // Insert greedy swaps along that shortest path, splitting them between moving the left side
         // and moving the right side to minimise the depth.  One side needs to move up to the split
-        // point and the other can stop one short because the gate will be routable then.
+
+        eprintln!("[DEBUG] Shortest path as PhysicalQubits");
+// point and the other can stop one short because the gate will be routable then.
         let split: usize = shortest_path.len() / 2;
         current_swaps.reserve(shortest_path.len() - 2);
         for i in 0..split {

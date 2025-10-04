@@ -47,7 +47,7 @@ backend = FakeGuadalupeV2()
 #figure = plot_error_map(backend)
 #figure.savefig(fname='./processor.png')
 
-NL = NoiseAdaptiveLayout(backend=backend)
+NL = NoiseAdaptiveLayout(backend=backend, k=5)
 NL.run(rev_dag1, dag2)
 init_layout = NL.property_set["layout"]
 

@@ -4,7 +4,7 @@ import os
 from qiskit.dagcircuit import DAGCircuit
 from qiskit.converters import dag_to_circuit
 import matplotlib.pyplot as plt
-
+from utilities import log_event
 class Splitter:
 
     def __init__(self, input_dag):
@@ -26,8 +26,10 @@ class Splitter:
         return dag
 
     def splitDagRandom(self):
-        k = random.randint(0, len(self.layers))
+        #k = random.randint(0, len(self.layers))
+        k= len(self.layers)
         self.k = k
+        log_event(f"split at: {k} / {len(self.layers)}")
         first_layers = self.layers[:k]
         second_layers = self.layers[k:]
         print(f"Splitting after layer {self.k} (out of {len(self.layers)} layers)")

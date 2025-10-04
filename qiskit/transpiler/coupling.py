@@ -226,7 +226,8 @@ class CouplingMap:
         def weight_fn(edge_data):
             """Return the error as the weight of the edge."""
             # Case 1: If edge_data["2qgate"] is a dict
-            return 1-(1-edge_data["cx"].error)**3
+            return edge_data["cx"].error
+            #return pow(10,1-edge_data["cx"].error)
 
         if self._error_dist_matrix is None:
             self._error_dist_matrix = rx.digraph_floyd_warshall_numpy(
@@ -290,28 +291,31 @@ class CouplingMap:
         if self._dist_matrix is None:
             self.compute_distance_matrix()
 
-        if self._error_dist_matrix is None:
-            self.compute_error_distance_matrix()
+        #if self._error_dist_matrix is None:
+        #    self.compute_error_distance_matrix()
 
-        if self._duration_dist_matrix is None:
-            self.compute_duration_distance_matrix()
+        # if self._duration_dist_matrix is None:
+        #     self.compute_duration_distance_matrix()
 
         if self._mix_dist_matrix is None:
 
-            neighbor_hops_matrix = self.compute_neighbor_based_matrices(self._dist_matrix, 0)
-            neighbor_duration_matrix = self.compute_neighbor_based_matrices(self._duration_dist_matrix, 0)
-            neighbor_error_matrix = self.compute_neighbor_based_matrices(self._error_dist_matrix,0)
+            #neighbor_hops_matrix = self.compute_neighbor_based_matrices(self._dist_matrix, 0)
+            # neighbor_duration_matrix = self.compute_neighbor_based_matrices(self._duration_dist_matrix, 0)
+            # neighbor_error_matrix = self.compute_neighbor_based_matrices(self._error_dist_matrix,0)
 
-            norm_hops = np.linalg.norm(np.where(np.isinf(neighbor_hops_matrix), 0, neighbor_hops_matrix))
-            norm_duration = np.linalg.norm(np.where(np.isinf(neighbor_duration_matrix), 0, neighbor_duration_matrix))
-            norm_error = np.linalg.norm(np.where(np.isinf(neighbor_error_matrix), 0, neighbor_error_matrix))
+            #neighbor_hops_matrix = self._dist_matrix
+            #neighbor_duration_matrix = self._duration_dist_matrix
+            #neighbor_error_matrix = self._error_dist_matrix
 
-            print('printing norms')
-            print(norm_hops)
-            print(norm_duration)
-            print(norm_error)
+            #norm_hops = np.linalg.norm(np.where(np.isinf(neighbor_hops_matrix), 0, neighbor_hops_matrix))
+            #norm_duration = np.linalg.norm(np.where(np.isinf(neighbor_duration_matrix), 0, neighbor_duration_matrix))
+            #norm_error = np.linalg.norm(np.where(np.isinf(neighbor_error_matrix), 0, neighbor_error_matrix))
+            norm_hops = np.linalg.norm(np.where(np.isinf(self._dist_matrix), 0, self._dist_matrix))
+            #norm_duration = np.linalg.norm(np.where(np.isinf(self._duration_dist_matrix), 0, self._duration_dist_matrix))
+            #norm_error = np.linalg.norm(np.where(np.isinf(self._error_dist_matrix), 0, self._error_dist_matrix))
 
-            self._mix_dist_matrix = (neighbor_duration_matrix/norm_duration) + (neighbor_hops_matrix/norm_hops) + (neighbor_error_matrix/norm_error)
+            self._mix_dist_matrix = self._dist_matrix
+            #print(self._mix_dist_matrix)
 
 
     def distance(self, physical_qubit1, physical_qubit2):

@@ -202,9 +202,6 @@ class HASwap(TransformationPass):
         if self.coupling_map is None:
             raise TranspilerError("SabreSwap cannot run with coupling_map=None")
 
-        if len(dag.qregs) != 1 or dag.qregs.get("q", None) is None:
-            raise TranspilerError("Sabre swap runs on physical circuits only.")
-
         num_dag_qubits = len(dag.qubits)
         num_coupling_qubits = self.coupling_map.size()
         if num_dag_qubits < num_coupling_qubits:

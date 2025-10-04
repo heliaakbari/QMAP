@@ -182,6 +182,7 @@ from .layout import Layout2qDistance
 from .layout import EnlargeWithAncilla
 from .layout import FullAncillaAllocation
 from .layout import SabrePreLayout
+from .layout import GreedyLayout
 
 # routing
 from .routing import BasicSwap
