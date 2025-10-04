@@ -42,7 +42,7 @@ def circuit_error_rate(circuit, backend):
         if name == "measure":
             for q in qubits:
                 meas_err = props.qubit_property(q, "readout_error")[0]
-                #error_probs.append(meas_err)
+                error_probs.append(meas_err)
         else:
             try:
                 gate_err = props.gate_error(name, qubits)

@@ -144,8 +144,8 @@ class NoiseAdaptiveLayout(AnalysisPass):
 
         sorted_edges = sorted(self.gate_reliability.items(), key=lambda x: x[1], reverse=True)
 
-        for edge, val in sorted_edges:
-            print(edge, ":", val)
+        # for edge, val in sorted_edges:
+        #     print(edge, ":", val)
 
         swap_reliabs_ro = rx.digraph_floyd_warshall_numpy(self.swap_graph, lambda weight: weight)
         for i in range(swap_reliabs_ro.shape[0]):
