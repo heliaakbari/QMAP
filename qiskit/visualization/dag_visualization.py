@@ -162,7 +162,7 @@ def dag_drawer(
         for attr in ["fontsize", "bgcolor", "dpi", "pad"]:
             if attr in style:
                 graph_attrs[attr] = str(style[attr])
-
+        graph_attrs["rankdir"] = "LR"
     style, _ = load_style(
         style,
         style_dict=DAGStyleDict,
@@ -171,7 +171,7 @@ def dag_drawer(
         user_config_path_opt="circuit_graphviz_style_path",
         raise_error_if_not_found=True,
     )
-
+    graph_attrs["rankdir"] = "LR"
     if "DAGDependency" in type_str:
         # pylint: disable=cyclic-import
         from qiskit.visualization.circuit._utils import get_bit_reg_index

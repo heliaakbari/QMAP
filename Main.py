@@ -1,45 +1,62 @@
 from test.benchmarks.qft import build_model_circuit
 from test.benchmarks.ripple_adder import build_ripple_adder_circuit
 from qiskit import QuantumRegister, QuantumCircuit
-from qiskit.converters import circuit_to_dag
+from qiskit.converters import circuit_to_dag, dag_to_circuit
 import numpy as np
 from GreedyE import NoiseAdaptiveLayout
 from qiskit.transpiler.passes.layout.full_ancilla_allocation import FullAncillaAllocation
 from qiskit.transpiler.passes.layout.enlarge_with_ancilla import EnlargeWithAncilla
 from qiskit.transpiler.passes.layout.apply_layout import ApplyLayout
-from qiskit_ibm_runtime.fake_provider import FakeGuadalupeV2
+from qiskit_ibm_runtime.fake_provider import FakeGuadalupeV2, FakeCasablancaV2, FakeMelbourneV2
 from qiskit.transpiler.passes import Unroll3qOrMore
 from qiskit.visualization import plot_error_map
 from SplitCircuit import Splitter
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit.transpiler.passes import SabreLayout, HASwap, SabreSwap, GreedyLayout
 from qiskit.transpiler import PassManager
-from utilities import circuit_error_rate, choose_benchmark, log_event
+from utilities import circuit_error_rate, choose_benchmark, log_event, circuit_two_qubit_error_rate
 from qiskit.transpiler.passes import (
     Collect2qBlocks,
     ConsolidateBlocks,
     UnitarySynthesis,
 )
 import matplotlib.pyplot as plt
+from qiskit_ibm_runtime import QiskitRuntimeService
+service = QiskitRuntimeService()
+backend = service.backend("ibm_torino")
 
-qc, name = choose_benchmark()
+print(
+    f"Name: {backend.name}\n"
+    f"Version: {backend.version}\n"
+    f"No. of qubits: {backend.num_qubits}\n"
+    f"basis gates: {backend.basis_gates}"
+)
+
+i, j = map(int, input().split())
+
+
+qc, name = choose_benchmark(choice=i)
 num_qubits = qc.num_qubits
-print()
-qc.draw("text")
-backend = FakeGuadalupeV2()
 figure = plot_error_map(backend)
 figure.savefig(fname='./processor.png')
+
 log_event("")
 log_event(f"circuit: {name}")
 log_event(f"gates: {qc.size()}")
 log_event(f"depth: {qc.depth(lambda x: x.operation.num_qubits == 2)}")
 log_event(f"backend: {backend.backend_name}")
 
-ha_manager = generate_preset_pass_manager(backend)
+ha_manager = generate_preset_pass_manager(backend=backend, optimization_level=0)
 
-greedy_layout = PassManager(
+greedy_layout_trials = PassManager(
     [
-        GreedyLayout(seed=42, coupling_map=backend, routing_pass=HASwap(seed=42, coupling_map=backend.target, fake_run=True, heuristic="decay", trials=10),max_iterations=15, k=10, skip_routing=True)
+        GreedyLayout(seed=42,layout_trials=20, coupling_map=backend,max_iterations=15, k=10, skip_routing=False)
+    ]
+)
+
+greedy_layout_routing = PassManager(
+    [
+        GreedyLayout(seed=42, coupling_map=backend, routing_pass=HASwap(seed=42, coupling_map=backend.target, fake_run=True, heuristic="decay", trials=10),max_iterations=5, k=20, skip_routing=True, numsplit=j)
     ]
 )
 
@@ -48,15 +65,21 @@ ha_swap = PassManager(
         FullAncillaAllocation(backend.target),
         EnlargeWithAncilla(),
         ApplyLayout(),
-        HASwap(seed=42, coupling_map=backend.target, heuristic="decay", trials=10, fake_run=False),
+        HASwap(seed=42,coupling_map=backend.target, heuristic="decay", trials=10, fake_run=False),
     ]
 )
 
-sabre_manager = generate_preset_pass_manager(backend)
+sabre_manager = generate_preset_pass_manager(backend=backend, optimization_level=0)
 
-sabre_layout = PassManager(
+sabre_layout_routing = PassManager(
     [
-        SabreLayout(seed=42, coupling_map=backend.target,max_iterations=15, skip_routing=True, routing_pass=SabreSwap(seed=42, coupling_map=backend.target, fake_run=True, heuristic="decay", trials=10))
+        SabreLayout(seed=42 ,coupling_map=backend.target,max_iterations=5, skip_routing=True, routing_pass=SabreSwap(seed=42, coupling_map=backend.target, fake_run=True, heuristic="decay", trials=10))
+    ]
+)
+
+sabre_layout_trial = PassManager(
+    [
+        SabreLayout(seed=42,layout_trials=20, coupling_map=backend.target,max_iterations=15, skip_routing=True)
     ]
 )
 
@@ -69,10 +92,10 @@ sabre_swap = PassManager(
     ]
 )
 # Add pre-layout stage to run extra logical optimization
-ha_manager.layout = greedy_layout
+ha_manager.layout = greedy_layout_routing
 ha_manager.routing = ha_swap
 # Add pre-layout stage to run extra logical optimization
-sabre_manager.layout = sabre_layout
+sabre_manager.layout = sabre_layout_routing
 sabre_manager.routing = sabre_swap
 
 import time
@@ -97,8 +120,8 @@ depth_ha_1 = tqc_ha_1.depth(lambda x: x.operation.num_qubits == 2)
 size_1 = tqc_1.size()
 size_ha_1 = tqc_ha_1.size()
 
-err_1 = circuit_error_rate(tqc_1, backend)
-err_ha_1 = circuit_error_rate(tqc_ha_1, backend)
+err_1 = circuit_two_qubit_error_rate(tqc_1, backend)
+err_ha_1 = circuit_two_qubit_error_rate(tqc_ha_1, backend)
 print(f"Estimated sabre circuit fidelity: {err_1:.4f}")
 print(f"Estimated HA circuit fidelity: {err_ha_1:.4f}")
 #operators_list_1 = [op.apply_layout(tqc_1.layout) for op in operators]

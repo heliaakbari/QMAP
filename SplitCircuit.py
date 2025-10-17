@@ -25,10 +25,17 @@ class Splitter:
 
         return dag
 
-    def splitDagRandom(self):
+    def splitDagRandom(self, split_num):
+        if split_num <= 0:
+            k = 0
+        elif split_num >= 5:
+            k = len(self.layers)
+        else:
+        # Compute proportional index
+            k = round((split_num / 5) * len(self.layers))
         #k = random.randint(0, len(self.layers))
-        k= len(self.layers)
         self.k = k
+        log_event(f"split num: {split_num}")
         log_event(f"split at: {k} / {len(self.layers)}")
         first_layers = self.layers[:k]
         second_layers = self.layers[k:]

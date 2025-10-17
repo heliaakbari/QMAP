@@ -16,6 +16,7 @@ mod layout;
 mod neighbor_table;
 mod route;
 mod haroute;
+mod halayout;
 pub mod sabre_dag;
 pub mod swap_map;
 
@@ -112,8 +113,9 @@ impl BlockResult {
 }
 
 pub fn sabre(m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(route::sabre_routing))?;
     m.add_wrapped(wrap_pyfunction!(haroute::ha_routing))?;
+    m.add_wrapped(wrap_pyfunction!(route::sabre_routing))?;
+    m.add_wrapped(wrap_pyfunction!(halayout::ha_layout_and_routing))?;
     m.add_wrapped(wrap_pyfunction!(layout::sabre_layout_and_routing))?;
     m.add_class::<heuristic::SetScaling>()?;
     m.add_class::<heuristic::Heuristic>()?;

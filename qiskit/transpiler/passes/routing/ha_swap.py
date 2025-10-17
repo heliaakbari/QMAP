@@ -281,14 +281,17 @@ class HASwap(TransformationPass):
             )
         if self.fake_run:
             return dag
-        return _apply_sabre_result(
-            dag.copy_empty_like(),
+        d = dag.copy_empty_like()
+        x =  _apply_sabre_result(
+            d,
             dag,
             sabre_result,
             initial_layout,
             dag.qubits,
-            circuit_to_dag_dict,
-        )
+            circuit_to_dag_dict,)
+        #d.draw(filename="dag_ha_apply_result.png")
+        #print(dag_to_circuit(d).draw(output="latex_source"))
+        return x
 
 
 def _build_sabre_dag(dag, num_physical_qubits, qubit_indices):

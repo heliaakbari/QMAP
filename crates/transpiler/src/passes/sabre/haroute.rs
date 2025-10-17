@@ -521,11 +521,42 @@ pub fn swap_map(
                     swap_map_trial(target, dag, heuristic, initial_layout, seed_trial),
                 )
             })
-            .min_by_key(|(index, (result, _))| {
-                [
-                    result.map.map.values().map(|x| x.len()).sum::<usize>(),
-                    *index,
-                ]
+            .min_by(|(index_a, (result_a, _)), (index_b, (result_b, _))| {
+                let total_a: f64 = result_a
+                    .map
+                    .map
+                    .values()
+                    .map(|pairs| {
+                        pairs.iter()
+                            .map(|[q1, q2]| {
+                                let i = q1.index();
+                                let j = q2.index();
+                                target.distance[[i,j]]
+                            })
+                            .sum::<f64>()
+                    })
+                    .sum::<f64>();
+
+                let total_b: f64 = result_b
+                    .map
+                    .map
+                    .values()
+                    .map(|pairs| {
+                        pairs.iter()
+                            .map(|[q1, q2]| {
+                                let i = q1.index();
+                                let j = q2.index();
+                                target.distance[[i,j]]
+                            })
+                            .sum::<f64>()
+                    })
+                    .sum::<f64>();
+
+                // Compare total distances, breaking ties by index
+                total_a
+                    .partial_cmp(&total_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| index_a.cmp(index_b))
             })
             .unwrap()
             .1
@@ -533,7 +564,41 @@ pub fn swap_map(
         seed_vec
             .into_iter()
             .map(|seed_trial| swap_map_trial(target, dag, heuristic, initial_layout, seed_trial))
-            .min_by_key(|(result, _)| result.map.map.values().map(|x| x.len()).sum::<usize>())
+            .min_by(|(result_a, _), (result_b, _)| {
+                let total_a: f64 = result_a
+                    .map
+                    .map
+                    .values()
+                    .map(|pairs| {
+                        pairs.iter()
+                            .map(|[q1, q2]| {
+                                let i = q1.index();
+                                let j = q2.index();
+                                target.distance[[i,j]]
+                            })
+                            .sum::<f64>()
+                    })
+                    .sum::<f64>();
+
+                let total_b: f64 = result_b
+                    .map
+                    .map
+                    .values()
+                    .map(|pairs| {
+                        pairs.iter()
+                            .map(|[q1, q2]| {
+                                let i = q1.index();
+                                let j = q2.index();
+                                target.distance[[i,j]]
+                            })
+                            .sum::<f64>()
+                    })
+                    .sum::<f64>();
+
+                total_a
+                    .partial_cmp(&total_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .unwrap()
     }
 }

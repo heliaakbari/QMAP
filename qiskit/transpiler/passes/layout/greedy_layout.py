@@ -18,7 +18,6 @@ import dataclasses
 import logging
 import functools
 import time
-from utilities import circuit_error_rate
 import numpy as np
 import rustworkx as rx
 
@@ -35,7 +34,7 @@ from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit._accelerate import disjoint_utils
 from qiskit._accelerate.nlayout import NLayout
-from qiskit._accelerate.sabre import sabre_layout_and_routing, Heuristic, NeighborTable, SetScaling
+from qiskit._accelerate.sabre import ha_layout_and_routing, Heuristic, NeighborTable, SetScaling
 from qiskit.transpiler.passes.routing.sabre_swap import _build_sabre_dag, _apply_sabre_result
 from qiskit.transpiler.target import Target
 from qiskit.transpiler.coupling import CouplingMap
@@ -120,6 +119,7 @@ class GreedyLayout(TransformationPass):
         layout_trials=None,
         skip_routing=False,
         k=None,
+        numsplit=None,
     ):
         """SabreLayout initializer.
 
@@ -180,6 +180,7 @@ class GreedyLayout(TransformationPass):
         self.max_iterations = max_iterations
         self.trials = swap_trials
         self.k = k
+        self.numsplit= numsplit
         if swap_trials is None:
             self.swap_trials = default_num_processes()
         else:
@@ -230,7 +231,7 @@ class GreedyLayout(TransformationPass):
             # physical_qubits = rng.choice(self.coupling_map.size(), len(dag.qubits), replace=False)
             # physical_qubits = rng.permutation(physical_qubits)
             NL = NoiseAdaptiveLayout(backend=self.backend, k=self.k)
-            initial_layout, dag1, dag2 = NL.run(dag)
+            initial_layout, dag1, dag2 = NL.run(dag,numsplit=self.numsplit)
             #from initial layout to layout of start of circuit
             circ1 = dag_to_circuit(dag1)
             self.routing_pass.fake_run = True
@@ -284,6 +285,15 @@ class GreedyLayout(TransformationPass):
         else:
             target = self.coupling_map
         inner_run = self._inner_run
+
+        #make initial layout:
+        initial_layouts=[]
+        NL = NoiseAdaptiveLayout(backend=self.backend, k=self.k)
+        for i in range(self.layout_trials):
+            initial_layout, dag1, dag2 = NL.run(dag)
+            initial_layouts.append(initial_layout)
+        self.property_set["sabre_starting_layouts"] = initial_layouts
+
         if "sabre_starting_layouts" in self.property_set:
             inner_run = functools.partial(
                 self._inner_run, starting_layouts=self.property_set["sabre_starting_layouts"]
@@ -429,7 +439,7 @@ class GreedyLayout(TransformationPass):
             coupling_map = copy.deepcopy(coupling_map)
             coupling_map.make_symmetric()
         neighbor_table = NeighborTable(rx.adjacency_matrix(coupling_map.graph))
-        dist_matrix = coupling_map.distance_matrix
+        dist_matrix = coupling_map.mix_dist_matrix
         original_qubit_indices = {bit: index for index, bit in enumerate(dag.qubits)}
         partial_layouts = []
         if starting_layouts is not None:
@@ -460,17 +470,23 @@ class GreedyLayout(TransformationPass):
             .with_decay(0.001, 5)
         )
         sabre_start = time.perf_counter()
-        (initial_layout, final_permutation, sabre_result) = sabre_layout_and_routing(
+        list = ha_layout_and_routing(
             sabre_dag,
             neighbor_table,
             dist_matrix,
             heuristic,
             self.max_iterations,
             self.swap_trials,
-            self.layout_trials,
+            0, #random trials
             self.seed,
             partial_layouts,
         )
+
+        for (initial_layout, final_permutation, sabre_result) in list:
+            print(sabre_result[0])
+
+
+
         sabre_stop = time.perf_counter()
         logger.debug(
             "Sabre layout algorithm execution for a connected component complete in: %s sec.",

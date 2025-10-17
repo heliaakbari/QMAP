@@ -278,10 +278,10 @@ class NoiseAdaptiveLayout(AnalysisPass):
 
         return new_dag
 
-    def run(self, dag):
+    def run(self, dag, numsplit):
 
         SP = Splitter(dag)
-        dag1 , dag2 = SP.splitDagRandom()
+        dag1 , dag2 = SP.splitDagRandom(numsplit)
         #SP.visualizeCircuits(dagName="test")
 
         self.available_hw_qubits = []
@@ -309,7 +309,7 @@ class NoiseAdaptiveLayout(AnalysisPass):
         if not self.program_edges:
             return
 
-        print(self.program_edges)
+        #print(self.program_edges)
 
         best_hw_edges = sorted(self.gate_reliability.items(), key=lambda x: x[1], reverse=True)[: self.k*2]
 
@@ -378,7 +378,7 @@ class NoiseAdaptiveLayout(AnalysisPass):
             score = self._score_mapping(prog2hw)
             candidate_scores.append((score, prog2hw))
 
-        print(f"candidates:",candidate_scores);
+        #print(f"candidates:",candidate_scores);
         best_mapping = max(candidate_scores, key=lambda x: x[0])[1]
 
         layout = Layout()

@@ -226,7 +226,10 @@ class CouplingMap:
         def weight_fn(edge_data):
             """Return the error as the weight of the edge."""
             # Case 1: If edge_data["2qgate"] is a dict
-            return edge_data["cx"].error
+            if edge_data["cz"].error == 1 :
+                return math.inf
+            return -3*math.log(1-edge_data["cz"].error)
+
             #return pow(10,1-edge_data["cx"].error)
 
         if self._error_dist_matrix is None:
@@ -291,8 +294,8 @@ class CouplingMap:
         if self._dist_matrix is None:
             self.compute_distance_matrix()
 
-        #if self._error_dist_matrix is None:
-        #    self.compute_error_distance_matrix()
+        if self._error_dist_matrix is None:
+           self.compute_error_distance_matrix()
 
         # if self._duration_dist_matrix is None:
         #     self.compute_duration_distance_matrix()
@@ -312,9 +315,9 @@ class CouplingMap:
             #norm_error = np.linalg.norm(np.where(np.isinf(neighbor_error_matrix), 0, neighbor_error_matrix))
             norm_hops = np.linalg.norm(np.where(np.isinf(self._dist_matrix), 0, self._dist_matrix))
             #norm_duration = np.linalg.norm(np.where(np.isinf(self._duration_dist_matrix), 0, self._duration_dist_matrix))
-            #norm_error = np.linalg.norm(np.where(np.isinf(self._error_dist_matrix), 0, self._error_dist_matrix))
+            norm_error = np.linalg.norm(np.where(np.isinf(self._error_dist_matrix), 0, self._error_dist_matrix))
 
-            self._mix_dist_matrix = self._dist_matrix
+            self._mix_dist_matrix = 0.5*(self._dist_matrix/norm_hops)+ 0.5*(self._error_dist_matrix/norm_error)
             #print(self._mix_dist_matrix)
 
 

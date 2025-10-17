@@ -55,18 +55,44 @@ def circuit_error_rate(circuit, backend):
     fidelity_log  = math.pow(math.e, np.sum([math.log(1 - p) for p in error_probs]))
     return fidelity_log
 
-def choose_benchmark():
-    for i in benchmarks:
-        print(f"{benchmarks.index(i)}: {i}")
-    ans= input("choose a circuit to map:")
+def circuit_two_qubit_error_rate(circuit, backend):
+    props = backend.properties()
+    error_probs = []
+
+    for instr, qargs, _ in circuit.data:
+        qubits = [circuit.find_bit(q).index for q in qargs]
+
+        # Only consider 2-qubit gates
+        if len(qubits) == 2:
+            try:
+                gate_err = props.gate_error(instr.name, qubits)
+                error_probs.append(gate_err)
+                #print(instr.name)
+            except:
+                # Gate not found in backend properties (e.g., virtual or synthesized gate)
+                pass
+
+    # If no 2-qubit gates, return perfect fidelity (1.0)
+    if not error_probs:
+        return 1.0
+
+    # Approximate total 2-qubit fidelity = product of (1 - p_i)
+    fidelity = math.exp(np.sum([math.log(1 - p) for p in error_probs]))
+    return fidelity
+
+
+def choose_benchmark(choice):
+    #for i in benchmarks:
+    #    print(f"{benchmarks.index(i)}: {i}")
+    ans= choice
     ans = benchmarks[int(ans)]
     qc = QuantumCircuit.from_qasm_file(f"./benchmark/{ans}.qasm")
     return qc, ans
 
 import re
 
-LOG_FILE = "logs.txt"
-EXCEL_LOG = "logs_excel.txt"
+LOG_FILE = "logs_final.txt"
+EXCEL_LOG = "logs_excel_final.txt"
 
 #LOG_FILE = "oncelog.txt"
 #EXCEL_LOG = "oncelogs_excel.txt"
@@ -120,7 +146,7 @@ def flush_run():
     global current_run
 
     headers = [
-        "circuit", "gates", "depth", "backend", "split at",
+        "circuit", "gates", "depth", "backend", "split num", "split at",
         "sabre fidelity", "sabre depth", "sabre size", "sabre time",
         "ha fidelity", "ha depth", "ha size", "ha time"
     ]
