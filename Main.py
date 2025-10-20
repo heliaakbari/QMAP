@@ -122,7 +122,7 @@ size_ha_1 = tqc_ha_1.size()
 
 err_1 = circuit_two_qubit_error_rate(tqc_1, backend)
 err_ha_1 = circuit_two_qubit_error_rate(tqc_ha_1, backend)
-print(f"Estimated sabre circuit fidelity: {err_1:.4f}")
+#print(f"Estimated sabre circuit fidelity: {err_1:.4f}")
 print(f"Estimated HA circuit fidelity: {err_ha_1:.4f}")
 #operators_list_1 = [op.apply_layout(tqc_1.layout) for op in operators]
 #operators_list_ha_1 = [op.apply_layout(tqc_ha_1.layout) for op in operators]
@@ -131,6 +131,8 @@ print(f"Estimated HA circuit fidelity: {err_ha_1:.4f}")
 print(f"Pass manager 1 (4,20,20)    : Depth {depth_1}, Size {size_1}, Time {t1:.4f} s")
 print(f"pmha_1 (4,20,20)            : Depth {depth_ha_1}, Size {size_ha_1}, Time {tha_1:.4f} s")
 log_event(f"Sabre            : Fidelity {err_1}, Depth {depth_1}, Size {size_1}, Time {t1:.4f} s")
+log_event(f"HA               : Fidelity {err_ha_1}, Depth {depth_ha_1}, Size {size_ha_1}, Time {tha_1:.4f} s")
+log_event(f"Sabre            : Fidelity {0}, Depth {0}, Size {0}, Time {0} s")
 log_event(f"HA               : Fidelity {err_ha_1}, Depth {depth_ha_1}, Size {size_ha_1}, Time {tha_1:.4f} s")
 
 

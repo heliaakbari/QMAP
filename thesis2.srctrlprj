@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<config>
+    <source_groups>
+        <source_group_93104cbc-5905-4334-afed-649a873bd8f7>
+            <exclude_filters>
+                <exclude_filter>test</exclude_filter>
+                <exclude_filter>tools</exclude_filter>
+                <exclude_filter>__pycache__</exclude_filter>
+                <exclude_filter>.tox</exclude_filter>
+                <exclude_filter>docs</exclude_filter>
+                <exclude_filter>qiskit.egg-info</exclude_filter>
+                <exclude_filter>releasenotes</exclude_filter>
+            </exclude_filters>
+            <name>Python Source Group</name>
+            <source_extensions>
+                <source_extension>.py</source_extension>
+            </source_extensions>
+            <source_paths>
+                <source_path>./</source_path>
+            </source_paths>
+            <status>enabled</status>
+            <type>Python Source Group</type>
+        </source_group_93104cbc-5905-4334-afed-649a873bd8f7>
+    </source_groups>
+    <version>8</version>
+</config>

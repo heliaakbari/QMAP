@@ -267,7 +267,8 @@ class HASwap(TransformationPass):
             self.dist_matrix,
             heuristic,
             initial_layout,
-            self.trials,
+            #self.trials,
+            1,
             self.seed,
         )
         sabre_stop = time.perf_counter()
@@ -282,6 +283,8 @@ class HASwap(TransformationPass):
         if self.fake_run:
             return dag
         d = dag.copy_empty_like()
+        print(f"{dag.name} Circuit size: {dag.size()}")
+        print(f"{dag.name} Circuit depth: {dag.depth()}")
         x =  _apply_sabre_result(
             d,
             dag,
@@ -289,6 +292,8 @@ class HASwap(TransformationPass):
             initial_layout,
             dag.qubits,
             circuit_to_dag_dict,)
+        print(f"HA size: {d.size()}")
+        print(f"HA depth: {d.depth()}")
         #d.draw(filename="dag_ha_apply_result.png")
         #print(dag_to_circuit(d).draw(output="latex_source"))
         return x

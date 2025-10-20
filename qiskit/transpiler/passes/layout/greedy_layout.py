@@ -248,6 +248,28 @@ class GreedyLayout(TransformationPass):
 
             circ = dag_to_circuit(dag=dag)
             rev_circ = circ.reverse_ops()
+        # Choose a random initial_layout.
+        # if self.routing_pass is not None:
+        #     if not self.coupling_map.is_connected():
+        #         raise TranspilerError(
+        #             "The routing_pass argument cannot be used with disjoint coupling maps."
+        #         )
+        #     if self.seed is None:
+        #         seed = np.random.randint(0, np.iinfo(np.int32).max)
+        #     else:
+        #         seed = self.seed
+        #     rng = np.random.default_rng(seed)
+
+        #     physical_qubits = rng.choice(self.coupling_map.size(), len(dag.qubits), replace=False)
+        #     physical_qubits = rng.permutation(physical_qubits)
+        #     initial_layout = Layout({q: dag.qubits[i] for i, q in enumerate(physical_qubits)})
+
+        #     self.routing_pass.fake_run = True
+
+        #     # Do forward-backward iterations.
+        #     circ = dag_to_circuit(dag)
+        #     rev_circ = circ.reverse_ops()
+
 
             for _ in range(self.max_iterations):
                 for _ in ("forward", "backward"):

@@ -303,8 +303,8 @@ class CouplingMap:
         if self._mix_dist_matrix is None:
 
             #neighbor_hops_matrix = self.compute_neighbor_based_matrices(self._dist_matrix, 0)
-            # neighbor_duration_matrix = self.compute_neighbor_based_matrices(self._duration_dist_matrix, 0)
-            # neighbor_error_matrix = self.compute_neighbor_based_matrices(self._error_dist_matrix,0)
+            #neighbor_duration_matrix = self.compute_neighbor_based_matrices(self._duration_dist_matrix, 0)
+            #neighbor_error_matrix = self.compute_neighbor_based_matrices(self._error_dist_matrix,0)
 
             #neighbor_hops_matrix = self._dist_matrix
             #neighbor_duration_matrix = self._duration_dist_matrix
@@ -317,7 +317,9 @@ class CouplingMap:
             #norm_duration = np.linalg.norm(np.where(np.isinf(self._duration_dist_matrix), 0, self._duration_dist_matrix))
             norm_error = np.linalg.norm(np.where(np.isinf(self._error_dist_matrix), 0, self._error_dist_matrix))
 
-            self._mix_dist_matrix = 0.5*(self._dist_matrix/norm_hops)+ 0.5*(self._error_dist_matrix/norm_error)
+            #self._mix_dist_matrix = 0.9*(self._dist_matrix/norm_hops)+ 0.1*(self._error_dist_matrix/norm_error)
+            #self._mix_dist_matrix = self._dist_matrix + self._error_dist_matrix/norm_error
+            self._mix_dist_matrix = self._dist_matrix
             #print(self._mix_dist_matrix)
 
 

@@ -259,7 +259,8 @@ class SabreSwap(TransformationPass):
             self.dist_matrix,
             heuristic,
             initial_layout,
-            self.trials,
+            1,
+            #self.trials,
             self.seed,
         )
         sabre_stop = time.perf_counter()
@@ -273,14 +274,16 @@ class SabreSwap(TransformationPass):
             )
         if self.fake_run:
             return dag
-        return _apply_sabre_result(
-            dag.copy_empty_like(),
+        d = dag.copy_empty_like()
+        x =  _apply_sabre_result(
+            d,
             dag,
             sabre_result,
             initial_layout,
             dag.qubits,
-            circuit_to_dag_dict,
-        )
+            circuit_to_dag_dict,)
+        print(f"SABRE size: {d.size()}")
+        print(f"SABRE depth: {d.depth()}")
 
 
 def _build_sabre_dag(dag, num_physical_qubits, qubit_indices):

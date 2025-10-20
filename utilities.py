@@ -81,10 +81,13 @@ def circuit_two_qubit_error_rate(circuit, backend):
     return fidelity
 
 
-def choose_benchmark(choice):
+def choose_benchmark(choice=None):
     #for i in benchmarks:
     #    print(f"{benchmarks.index(i)}: {i}")
-    ans= choice
+    if choice:
+        ans= choice
+    else:
+        ans = int(input())
     ans = benchmarks[int(ans)]
     qc = QuantumCircuit.from_qasm_file(f"./benchmark/{ans}.qasm")
     return qc, ans
